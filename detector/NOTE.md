@@ -1,0 +1,1 @@
+Opening the visualization while generating data will result in a latency drop (for some reason)
