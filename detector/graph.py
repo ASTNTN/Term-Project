@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-STRUCT_SIZE = 8  # sizeof(double)
-
 dtype = np.dtype([
     ("latency",   np.float64),
     ("dropped",   np.uint64),

@@ -1,16 +1,17 @@
-set(LIBRARY_NAME "udp-detector")
+set(EXECUTABLE_NAME "udp-detector")
 
-add_library(${LIBRARY_NAME}
+add_executable(${EXECUTABLE_NAME}
 	main.c
 )
 
-target_include_directories(${LIBRARY_NAME} PUBLIC
+target_include_directories(${EXECUTABLE_NAME} PUBLIC
 	${CMAKE_SOURCE_DIR}/include
 )
 
-target_link_libraries(${LIBRARY_NAME} PUBLIC
-	descent-build
+target_link_libraries(${EXECUTABLE_NAME} PUBLIC
+	udp-detector-client
+	udp-detector-server
 )
 
-target_compile_options(${LIBRARY_NAME} PRIVATE
+target_compile_options(${EXECUTABLE_NAME} PRIVATE
 )

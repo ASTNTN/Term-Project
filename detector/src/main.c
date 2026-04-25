@@ -1,15 +1,13 @@
-#include <pthread.h>
 #include <fcntl.h>
-#include <stdbool.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h>
+#include <unistd.h>
 
 #include <detector/client.h>
+#include <detector/config.h>
 #include <detector/server.h>
 #include <detector/thread.h>
-
-static struct output output = {0};
 
 int main(int argc, char **argv) {
 	thread_setup(THREAD_NUMBER_MAIN);
@@ -28,7 +26,7 @@ int main(int argc, char **argv) {
 	}
 
 	pthread_t server;
-	if (pthread_create(&server, NULL, server_main, &output)) {
+	if (pthread_create(&server, NULL, server_main, &sink)) {
 		perror("ERROR: Could not create server thread");
 		exit(EXIT_FAILURE);
 	}
@@ -39,9 +37,10 @@ int main(int argc, char **argv) {
 		exit(EXIT_FAILURE);
 	}
 
-	for (;;) {
-		output_write(sink, &output);
-	}
+	pthread_join(server, NULL);
+	pthread_join(client, NULL);
+
+	close(sink);
 
 	return 0;
 }

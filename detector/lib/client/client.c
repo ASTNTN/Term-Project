@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include <detector/client.h>
 
 #include <arpa/inet.h>

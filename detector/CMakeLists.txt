@@ -3,8 +3,6 @@ cmake_minimum_required(VERSION 3.23)
 project(upd-detector LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -19,6 +17,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 # Flags
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
 set(WARNINGS_AS_ERRORS ON CACHE BOOL "Treat warnings as errors" FORCE)
+
+add_compile_definitions(_GNU_SOURCE)
 
 # Separate internal C flags
 separate_arguments(INTERN_C_FLAGS)

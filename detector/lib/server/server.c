@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include <detector/server.h>
 
 #include <arpa/inet.h>
@@ -23,22 +21,88 @@ struct entry {
 	uint64_t duplicate;
 };
 
-static struct io_uring ring;
-static struct entry entries[SEGMENT_COUNT][SEGMENT_SIZE];
-static size_t segment_index;
-static size_t entry_index;
+enum segment_state {
+	SEGMENT_FREE = 0, // can be written into
+	SEGMENT_IN_FLIGHT // submitted to kernel
+};
 
-static inline void submit_entry(int sink) {
-	struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
-	if (!sqe) {
-		io_uring_submit(&ring);
-		sqe = io_uring_get_sqe(&ring);
-		if (!sqe) return;
+struct segment {
+	struct entry entries[ENTRY_COUNT];
+};
+
+struct entries {
+	struct segment segments[SEGMENT_COUNT];
+	enum segment_state states[SEGMENT_COUNT];
+	size_t entry_index;
+	size_t segment_index;
+	off_t write_offset;
+};
+
+static struct entries entries = {0};
+static struct io_uring ring = {0};
+
+// The idea is to fill a segment up. The server moves on to the next segment, and the kernel writes the existing segment to a file.
+// There will only ever be one producer thread for this sink.
+
+static inline void handle_completions(void) {
+	struct io_uring_cqe *cqe;
+
+	while (io_uring_peek_cqe(&ring, &cqe) == 0) {
+		size_t seg_id = cqe->user_data;
+
+		if (cqe->res < 0) {
+			fprintf(stderr, "write failed: %s\n", strerror(-cqe->res));
+			exit(EXIT_FAILURE);
+		}
+
+		entries.states[seg_id] = SEGMENT_FREE;
+
+		io_uring_cqe_seen(&ring, cqe);
+	}
+}
+
+static inline void submit_segment(int sink, off_t offset) {
+	struct io_uring_sqe *sqe;
+	while (!(sqe = io_uring_get_sqe(&ring))) {
+		fprintf(stderr, "SERVER WARNING: SQE full\n");
+		handle_completions();
 	}
 
-	io_uring_prep_write(sqe, sink, &entries[segment_index], sizeof(entries[segment_index]), -1);
+	size_t seg_id = entries.segment_index;
+	struct segment *segment = &entries.segments[seg_id];
 
-	sqe->flags = IOSQE_ASYNC;
+	io_uring_prep_write(sqe, sink, segment, sizeof(struct segment), offset);
+
+	sqe->user_data = seg_id;
+
+	entries.states[seg_id] = SEGMENT_IN_FLIGHT;
+
+	int ret = io_uring_submit(&ring);
+	if (ret < 0) {
+		fprintf(stderr, "io_uring_submit failed: %s\n", strerror(-ret));
+		exit(EXIT_FAILURE);
+	}
+}
+
+static inline void write_entry(struct entry entry, int sink) {
+	struct segment *segment = &entries.segments[entries.segment_index];
+
+	segment->entries[entries.entry_index++] = entry;
+
+	if (entries.entry_index < ENTRY_COUNT)
+		return;
+
+	submit_segment(sink, entries.write_offset);
+
+	entries.entry_index = 0;
+
+	entries.segment_index = (entries.segment_index + 1) % SEGMENT_COUNT;
+	entries.write_offset += sizeof(struct segment);
+
+	if (entries.states[entries.segment_index] != SEGMENT_FREE) {
+		fprintf(stderr, "Next buffer still in flight - increase SEGMENT_COUNT\n");
+		exit(EXIT_FAILURE);
+	}
 }
 
 void *server_main(void *sink_void) {
@@ -50,8 +114,7 @@ void *server_main(void *sink_void) {
 	}
 
 	int sink = *(int *)sink_void;
-
-	if (io_uring_queue_init(SUBMISSION_QUEUE_ENTRY_COUNT, &ring, 0) < 0) {
+	if (io_uring_queue_init(SEGMENT_COUNT, &ring, 0) < 0) {
 		perror("io_uring_queue_init failed");
 		exit(EXIT_FAILURE);
 	}
@@ -112,17 +175,16 @@ void *server_main(void *sink_void) {
 				.duplicate = count_duplicate,
 			};
 
+    	write_entry(entry, sink);
+
 			count_latency = 0;
 			count_dropped = 0;
 			count_duplicate = 0;
-
-			entries[++entry_index][segment_index] = entry;
 		}
 
-		if (segment_index == SEGMENT_SIZE) {
-			submit_entry(sink);
-			segment_index = segment_index + 1 % SEGMENT_COUNT;
-			entry_index = 0;
+		static int flush_counter = 0;
+		if (++flush_counter >= 16) {
+    	handle_completions();
 		}
 	}
 
