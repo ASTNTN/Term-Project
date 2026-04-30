@@ -24,6 +24,5 @@ add_compile_definitions(_GNU_SOURCE)
 separate_arguments(INTERN_C_FLAGS)
 
 # Subdirectories
-add_subdirectory(lib)
 add_subdirectory(src)
 

@@ -1,5 +1,3 @@
-#include <detector/server.h>
-
 #include <arpa/inet.h>
 #include <liburing.h>
 #include <math.h>
@@ -105,17 +103,17 @@ static inline void write_entry(struct entry entry, int sink) {
 	}
 }
 
-void *server_main(void *sink_void) {
+int main() {
 	thread_setup(THREAD_NUMBER_SERVER);
 
-	if (!sink_void) {
-		fputs("SERVER ERROR: Sink is NULL\n", stderr);
+	int sink = open("output.hex", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (sink < 0) {
+		perror("ERROR: open failed");
 		exit(EXIT_FAILURE);
 	}
 
-	int sink = *(int *)sink_void;
 	if (io_uring_queue_init(SEGMENT_COUNT, &ring, 0) < 0) {
-		perror("io_uring_queue_init failed");
+		perror("ERROR: io_uring_queue_init failed");
 		exit(EXIT_FAILURE);
 	}
 
@@ -184,9 +182,10 @@ void *server_main(void *sink_void) {
 
 		static int flush_counter = 0;
 		if (++flush_counter >= 16) {
+			flush_counter = 0;
     	handle_completions();
 		}
 	}
 
-	return NULL;
+	return 0;
 }

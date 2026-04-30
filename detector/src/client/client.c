@@ -1,5 +1,3 @@
-#include <detector/client.h>
-
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdint.h>
@@ -7,6 +5,11 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <time.h>
+
+#include <netlink/netlink.h>
+#include <netlink/genl/genl.h>
+#include <netlink/genl/ctrl.h>
+#include <linux/nl80211.h>
 
 #include <detector/config.h>
 #include <detector/datagram.h>
@@ -24,15 +27,15 @@ static inline struct datagram build_datagram(void) {
 	return datagram;
 }
 
-void *client_main(void *address_void) {
+int main(int argc, const char **argv) {
 	thread_setup(THREAD_NUMBER_CLIENT);
 
-	if (!address_void) {
-		fputs("CLIENT ERROR: Address is NULL\n", stderr);
+	if (argc != 2) {
+		fputs("Usage: client <address>\n", stderr);
 		exit(EXIT_FAILURE);
 	}
 
-	char *address = (char *)address_void;
+	const char *address = argv[1];
 
 	int sd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sd < 0) {
@@ -44,7 +47,7 @@ void *client_main(void *address_void) {
 	sockaddr.sin_family = AF_INET;
 	sockaddr.sin_port = htons(RECEIVER_PORT);
 	if (inet_pton(AF_INET, address, &sockaddr.sin_addr) != 1) {
-		perror("CLIENT ERROR: inet_pton");
+		perror("CLIENT ERROR: inet_pton failed");
 		exit(EXIT_FAILURE);
 	}
 
@@ -67,5 +70,5 @@ void *client_main(void *address_void) {
 		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL);
 	}
 
-	return NULL;
+	return 0;
 }

@@ -19,12 +19,6 @@ int main(int argc, char **argv) {
 
 	const char *address = argv[1];
 
-	int sink = open("output.hex", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-	if (sink < 0) {
-		perror("ERROR: Could not open output file");
-		exit(EXIT_FAILURE);
-	}
-
 	pthread_t server;
 	if (pthread_create(&server, NULL, server_main, &sink)) {
 		perror("ERROR: Could not create server thread");
