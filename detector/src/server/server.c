@@ -103,35 +103,82 @@ static inline void write_entry(struct entry entry, int sink) {
 	}
 }
 
-int main() {
-	thread_setup(THREAD_NUMBER_SERVER);
+static inline int connect_sink(const char *address, bool file) {
+	int sink;
 
-	int sink = open("output.hex", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-	if (sink < 0) {
-		perror("ERROR: open failed");
+	if (file) {
+		sink = open(address, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (sink < 0) {
+			perror("SERVER ERROR: sink open failed");
+			exit(EXIT_FAILURE);
+		}
+	}
+	else {
+		sink = socket(AF_INET, SOCK_STREAM, 0);
+		if (sink < 0) {
+			perror("SERVER ERROR: sink socket failed");
+			exit(EXIT_FAILURE);
+		}
+
+		struct sockaddr_in sink_sockaddr;
+		sink_sockaddr.sin_family = AF_INET;
+		sink_sockaddr.sin_port = htons(RECEIVER_PORT);
+		if (inet_pton(AF_INET, address, &sink_sockaddr.sin_addr) != 1) {
+			perror("CLIENT ERROR: sink inet_pton failed");
+			exit(EXIT_FAILURE);
+		}
+
+		if (connect(sink, (struct sockaddr *) &sink_sockaddr, sizeof(sink_sockaddr))) {
+			perror("CLIENT ERROR: sink connect failed");
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	return sink;
+}
+
+static inline int bind_source(void) {
+	int source = socket(AF_INET, SOCK_DGRAM, 0);
+	if (source < 0) {
+		perror("SERVER ERROR: source socket failed");
 		exit(EXIT_FAILURE);
 	}
+
+	struct sockaddr_in source_sockaddr = {0};
+	source_sockaddr.sin_family = AF_INET;
+	source_sockaddr.sin_addr.s_addr = INADDR_ANY;
+	source_sockaddr.sin_port = htons(RECEIVER_PORT);
+
+	if (bind(source, (struct sockaddr *) &source_sockaddr, sizeof(source_sockaddr))) {
+		perror("SERVER ERROR: source bind failed");
+		exit(EXIT_FAILURE);
+	}
+
+	return source;
+}
+
+int main(int argc, char **argv) {
+	thread_setup(THREAD_NUMBER_SERVER);
+
+	bool file;
+
+	if (argc == 2)
+		file = false;
+	else if (argc == 3)
+		file = true;
+	else {
+		fputs("Usage: server <address>\n", stderr);
+		exit(EXIT_SUCCESS);
+	}
+
+	int sink = connect_sink(argv[1], file);
 
 	if (io_uring_queue_init(SEGMENT_COUNT, &ring, 0) < 0) {
 		perror("ERROR: io_uring_queue_init failed");
 		exit(EXIT_FAILURE);
 	}
 
-	int sd = socket(AF_INET, SOCK_DGRAM, 0);
-	if (sd < 0) {
-		perror("SERVER ERROR: socket failed");
-		exit(EXIT_FAILURE);
-	}
-
-	struct sockaddr_in sockaddr = {0};
-	sockaddr.sin_family = AF_INET;
-	sockaddr.sin_addr.s_addr = INADDR_ANY;
-	sockaddr.sin_port = htons(RECEIVER_PORT);
-
-	if (bind(sd, (struct sockaddr *) &sockaddr, sizeof(sockaddr))) {
-		perror("SERVER ERROR: bind failed");
-		exit(EXIT_FAILURE);
-	}
+	int source = bind_source();
 
 	uint64_t generation = 0;
 
@@ -144,7 +191,7 @@ int main() {
 		struct datagram datagram;
 
 		// Client and server are both little-endian
-		ssize_t size = recvfrom(sd, &datagram, sizeof(datagram), 0, NULL, NULL);
+		ssize_t size = recvfrom(source, &datagram, sizeof(datagram), 0, NULL, NULL);
 		if (size < 0) {
 			perror("SERVER ERROR: recvfrom failed");
 			exit(EXIT_FAILURE);

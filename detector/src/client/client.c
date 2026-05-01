@@ -32,7 +32,7 @@ int main(int argc, const char **argv) {
 
 	if (argc != 2) {
 		fputs("Usage: client <address>\n", stderr);
-		exit(EXIT_FAILURE);
+		exit(EXIT_SUCCESS);
 	}
 
 	const char *address = argv[1];
@@ -47,7 +47,7 @@ int main(int argc, const char **argv) {
 	sockaddr.sin_family = AF_INET;
 	sockaddr.sin_port = htons(RECEIVER_PORT);
 	if (inet_pton(AF_INET, address, &sockaddr.sin_addr) != 1) {
-		perror("CLIENT ERROR: inet_pton failed");
+		fprintf(stderr, "CLIENT ERROR: inet_pton failed\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -58,7 +58,7 @@ int main(int argc, const char **argv) {
 		struct datagram datagram = build_datagram();
 
 		// Client and server are both little-endian
-		if (sendto(sd, &datagram, sizeof(datagram), 0, (struct sockaddr*)&sockaddr, sizeof(sockaddr)) < 0) {
+		if (sendto(sd, &datagram, sizeof(datagram), 0, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0) {
 			perror("CLIENT ERROR: sendto failed");
 			exit(EXIT_FAILURE);
 		}
