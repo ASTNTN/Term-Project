@@ -10,6 +10,7 @@ target_include_directories(${EXECUTABLE_NAME} PUBLIC
 
 target_link_libraries(${EXECUTABLE_NAME} PUBLIC
 	uring
+	atomic
 )
 
 target_compile_options(${EXECUTABLE_NAME} PRIVATE
