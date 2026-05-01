@@ -6,11 +6,6 @@
 #include <sys/socket.h>
 #include <time.h>
 
-#include <netlink/netlink.h>
-#include <netlink/genl/genl.h>
-#include <netlink/genl/ctrl.h>
-#include <linux/nl80211.h>
-
 #include <detector/config.h>
 #include <detector/datagram.h>
 #include <detector/thread.h>
