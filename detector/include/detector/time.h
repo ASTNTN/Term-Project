@@ -10,7 +10,7 @@ static inline uint64_t time_nanoseconds(void ) {
 	struct timespec timespec_now = {0};
 	clock_gettime(CLOCK_MONOTONIC, &timespec_now);
 
-	return timespec_now.tv_sec * NANOSECONDS_PER_SECOND + timespec_now.tv_nsec;
+	return (uint64_t) timespec_now.tv_sec * NANOSECONDS_PER_SECOND + (uint64_t) timespec_now.tv_nsec;
 }
 
 #endif
