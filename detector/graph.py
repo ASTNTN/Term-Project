@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 dtype = np.dtype([
     ("latency",   np.float64),
@@ -15,8 +16,7 @@ def load_output(path):
 
     return values
 
-def main():
-    path = "output.hex"
+def main(path):
     data = load_output(path)
 
     latency   = data["latency"]
@@ -47,4 +47,4 @@ def main():
     plt.show()
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1])

@@ -59,7 +59,7 @@ static inline void handle_completions(void) {
 	}
 }
 
-static inline void submit_segment(int sink, off_t offset) {
+static inline void submit_segment(int sink, off_t offset, bool file) {
 	struct io_uring_sqe *sqe;
 	while (!(sqe = io_uring_get_sqe(&ring))) {
 		fprintf(stderr, "SERVER WARNING: SQE full\n");
@@ -69,7 +69,7 @@ static inline void submit_segment(int sink, off_t offset) {
 	size_t seg_id = entries.segment_index;
 	struct segment *segment = &entries.segments[seg_id];
 
-	io_uring_prep_write(sqe, sink, segment, sizeof(struct segment), offset);
+	io_uring_prep_write(sqe, sink, segment, sizeof(struct segment), file ? offset : -1);
 
 	sqe->user_data = seg_id;
 

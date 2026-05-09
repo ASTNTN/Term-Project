@@ -1,3 +1,5 @@
 output.hex
 build/
 build/*
+outputs/
+outputs/*
