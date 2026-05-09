@@ -1,104 +1,124 @@
+from collections import deque
+import matplotlib.pyplot as plt
 import socket
 import struct
 import sys
+import time
 
-
-# Must match the C definitions exactly.
-#
-# struct entry {
-#     double latency;
-#     uint64_t dropped;
-#     uint64_t duplicate;
-# };
-#
-# struct segment {
-#     struct entry entries[ENTRY_COUNT];
-# };
-#
-# Little-endian layout assumed.
-
-ENTRY_COUNT = 1024  # change to match your config.h
-RECEIVER_PORT = 8329  # change to match your config.h
+ENTRY_COUNT = 1024
+RECEIVER_PORT = 8329
 
 ENTRY_STRUCT = struct.Struct("<dQQ")
 ENTRY_SIZE = ENTRY_STRUCT.size
 
 SEGMENT_SIZE = ENTRY_SIZE * ENTRY_COUNT
 
+HISTORY = 10000
 
-def recv_exact(sock: socket.socket, size: int) -> bytes:
-    data = bytearray()
+def recv_exact(socket, size):
+	data = bytearray()
 
-    while len(data) < size:
-        chunk = sock.recv(size - len(data))
-        if not chunk:
-            raise ConnectionError("peer disconnected")
+	while len(data) < size:
+		chunk = socket.recv(size - len(data))
 
-        data.extend(chunk)
+		if not chunk:
+			raise ConnectionError("peer disconnected")
 
-    return bytes(data)
+		data.extend(chunk)
+
+	return bytes(data)
 
 
 def decode_segment(data: bytes):
-    for i in range(ENTRY_COUNT):
-        offset = i * ENTRY_SIZE
-        latency, dropped, duplicate = ENTRY_STRUCT.unpack_from(data, offset)
+	for i in range(ENTRY_COUNT):
+		offset = i * ENTRY_SIZE
 
-        yield {
-            "index": i,
-            "latency_ns": latency,
-            "dropped": dropped,
-            "duplicate": duplicate,
-        }
+		latency, dropped, duplicate = ENTRY_STRUCT.unpack_from(
+			data,
+			offset,
+		)
+
+		yield latency, dropped, duplicate
 
 
-def main():
-    bind_addr = "0.0.0.0"
+def main(sink):
+	bind_addr = "0.0.0.0"
 
-    if len(sys.argv) > 1:
-        bind_addr = sys.argv[1]
+	server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+	server.bind((bind_addr, RECEIVER_PORT))
+	server.listen(1)
 
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	print(f"listening on {bind_addr}:{RECEIVER_PORT}")
 
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+	conn, addr = server.accept()
 
-    server.bind((bind_addr, RECEIVER_PORT))
-    server.listen(1)
+	print(f"connection from {addr[0]}:{addr[1]}")
 
-    print(f"listening on {bind_addr}:{RECEIVER_PORT}")
+	plt.ion()
 
-    conn, addr = server.accept()
+	fig, ax = plt.subplots(figsize=(12, 6))
 
-    print(f"connection from {addr[0]}:{addr[1]}")
+	latency_history = deque(maxlen=HISTORY)
+	dropped_history = deque(maxlen=HISTORY)
+	duplicate_history = deque(maxlen=HISTORY)
 
-    segment_number = 0
+	x_history = deque(maxlen=HISTORY)
 
-    try:
-        while True:
-            raw_segment = recv_exact(conn, SEGMENT_SIZE)
+	line_latency, = ax.plot([], [], label="Latency (ns)")
 
-            print(f"\nsegment {segment_number}")
+	ax.set_title("Packet Latency")
+	ax.set_xlabel("Packet Index")
+	ax.set_ylabel("Latency (ns)")
 
-            for entry in decode_segment(raw_segment):
-                print(
-                    f"[{entry['index']:04d}] "
-                    f"latency={entry['latency_ns']:.0f} ns "
-                    f"dropped={entry['dropped']} "
-                    f"duplicate={entry['duplicate']}"
-                )
+	ax.legend()
 
-            segment_number += 1
+	packet_counter = 0
+	segment_number = 0
 
-    except KeyboardInterrupt:
-        print("\nshutting down")
+	try:
+		while True:
+			raw_segment = recv_exact(conn, SEGMENT_SIZE)
+			sink.write(raw_segment)
+			sink.flush()
 
-    except ConnectionError as e:
-        print(f"\nconnection closed: {e}")
+			for latency_ns, dropped, duplicate in decode_segment(raw_segment):
+				x_history.append(packet_counter)
+				latency_history.append(latency_ns)
 
-    finally:
-        conn.close()
-        server.close()
+				dropped_history.append(dropped)
+				duplicate_history.append(duplicate)
+
+				packet_counter += 1
+
+			x = list(x_history)
+			y = list(latency_history)
+
+			line_latency.set_data(x, y)
+
+			ax.relim()
+			ax.autoscale_view()
+
+			plt.draw()
+			plt.pause(0.001)
+
+			segment_number += 1
+
+	except KeyboardInterrupt:
+		print("\nshutting down")
+
+	except ConnectionError as e:
+		print(f"\nconnection closed: {e}")
+
+	finally:
+		conn.close()
+		server.close()
 
 
 if __name__ == "__main__":
-    main()
+	sink_name = f"data-{time.time()}.hex"
+	sink = open(sink_name, "ab")
+
+	print(f"saving to {sink_name}")
+
+	main(sink)
