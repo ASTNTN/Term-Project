@@ -82,7 +82,7 @@ static inline void submit_segment(int sink, off_t offset, bool file) {
 	}
 }
 
-static inline void write_entry(struct entry entry, int sink) {
+static inline void write_entry(struct entry entry, int sink, bool file) {
 	struct segment *segment = &entries.segments[entries.segment_index];
 
 	segment->entries[entries.entry_index++] = entry;
@@ -90,7 +90,7 @@ static inline void write_entry(struct entry entry, int sink) {
 	if (entries.entry_index < ENTRY_COUNT)
 		return;
 
-	submit_segment(sink, entries.write_offset);
+	submit_segment(sink, entries.write_offset, file);
 
 	entries.entry_index = 0;
 
@@ -220,7 +220,7 @@ int main(int argc, char **argv) {
 				.duplicate = count_duplicate,
 			};
 
-    	write_entry(entry, sink);
+    	write_entry(entry, sink, file);
 
 			count_latency = 0;
 			count_dropped = 0;
